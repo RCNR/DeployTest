@@ -5,7 +5,7 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class ResponseOutputDto {
+public class ResponseRankingOutputDto {
 
     // HTS 한글 종목명
     private String htsKorIsnm;

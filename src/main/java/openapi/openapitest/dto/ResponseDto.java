@@ -14,7 +14,7 @@ public class ResponseDto {
     private String msg1;
 
     // 응답상세
-    private List<ResponseOutputDto> output;
+    private List<ResponseRankingOutputDto> output;
 
 
 }

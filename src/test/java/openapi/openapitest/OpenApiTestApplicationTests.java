@@ -8,6 +8,7 @@ class OpenApiTestApplicationTests {
 
     @Test
     void contextLoads() {
+
     }
 
 }

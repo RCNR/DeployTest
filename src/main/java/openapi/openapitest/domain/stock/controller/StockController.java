@@ -16,7 +16,7 @@ public class StockController {
 
 
     @PostMapping("/post-stock-codes")
-    @Tag(name = "코스피 주식 코드를 저장")
+    @Tag(name = "코스피, 코스닥, 나스닥 주식 코드를 저장")
     public ResponseEntity<String> postStockCodes() {
         try {
             stockCodeService.process();

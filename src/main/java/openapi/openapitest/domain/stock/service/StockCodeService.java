@@ -1,8 +1,10 @@
 package openapi.openapitest.domain.stock.service;
 
 import lombok.RequiredArgsConstructor;
-import openapi.openapitest.domain.stock.entity.jpa.StockCode;
-import openapi.openapitest.domain.stock.repository.jpa.StockCodeRepository;
+import openapi.openapitest.domain.stock.entity.NasdaqStockCode;
+import openapi.openapitest.domain.stock.entity.StockCode;
+import openapi.openapitest.domain.stock.repository.NasdaqCodeRepository;
+import openapi.openapitest.domain.stock.repository.StockCodeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,20 +23,44 @@ import java.util.zip.ZipInputStream;
 public class StockCodeService {
 
     private final StockCodeRepository stockCodeRepository;
+    private final NasdaqCodeRepository nasdaqCodeRepository;
 
     public void process() throws IOException {
         stockCodeRepository.deleteAll();
 
-        String zipUrl = "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip";
+        String kospiZipUrl = "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip";
+        String kosdaqZipUrl = "https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip";
+        String nasdaqZipUrl = "https://new.real.download.dws.co.kr/common/master/nasmst.cod.zip";
 
-        String zipPath = "C:\\Users\\cjsla\\Downloads\\stockcodes\\kospi_code.mst.zip";
+        String kospiZipPath = "C:\\Users\\cjsla\\Downloads\\stockcodes\\kospi_code.mst.zip";
+        String kosdaqiZipPath = "C:\\Users\\cjsla\\Downloads\\stockcodes\\kosdaq_code.mst.zip";
+        String nasdaqiZipPath = "C:\\Users\\cjsla\\Downloads\\stockcodes\\nasmst.cod.zip";
+
         String extractDir = "/stockcodes/";
-        String txtFileName = "kospi_code.mst";
+        String kospiTxtFileName = "kospi_code.mst";
+        String kosdaqTxtFileName = "kosdaq_code.mst";
+        String nasdaqTxtFileName = "nasmst.cod";
 
-        download(zipUrl, zipPath);
-        unzip(zipPath, extractDir);
-        List<String> stockCodes = extractStockCode(extractDir + txtFileName);
-        saveStockCodes(stockCodes);
+        download(kospiZipUrl, kospiZipPath);
+        unzip(kospiZipPath, extractDir);
+        List<String> kospiStockCodes = extractStockCode(extractDir + kospiTxtFileName);
+        saveStockCodes(kospiStockCodes);
+
+        download(kosdaqZipUrl, kosdaqiZipPath);
+        unzip(kosdaqiZipPath, extractDir);
+        List<String> kosdaqStockCodes = extractStockCode(extractDir + kosdaqTxtFileName);
+        saveStockCodes(kosdaqStockCodes);
+
+        download(nasdaqZipUrl, nasdaqiZipPath);
+        unzip(nasdaqiZipPath, extractDir);
+        List<String> nasdaqStockCodes = extractNasdaqStockCode(extractDir + nasdaqTxtFileName);
+        saveNasdaqStockCodes(nasdaqStockCodes);
+    }
+
+    public void saveNasdaqStockCodes(List<String> codes) {
+        for (String code : codes) {
+            nasdaqCodeRepository.save(new NasdaqStockCode(code));
+        }
     }
 
     public void saveStockCodes(List<String> codes) {
@@ -96,9 +122,35 @@ public class StockCodeService {
 
         String line;
         while ((line = br.readLine()) != null) {
-            if (line.length() >= 6) {
+            if (line.startsWith("F")) continue;
+            else if (line.startsWith("Q")) {
+                String code = line.substring(0, 7).trim();
+                codes.add(code);
+            }
+            else if (line.startsWith("J")) {
+                String code = line.substring(1, 7).trim();
+                codes.add(code);
+            }
+            else if (line.length() >= 6) {
                 String code = line.substring(0, 6).trim();
                 codes.add(code);
+            }
+        }
+        br.close();
+        return codes;
+    }
+
+    public List<String> extractNasdaqStockCode(String txtFilePath) throws IOException {
+
+        List<String> codes = new ArrayList<>();
+        BufferedReader br = new BufferedReader(new FileReader(txtFilePath));
+
+        String line;
+        while ((line = br.readLine()) != null) {
+            String[] tokens = line.split("\t");
+
+            if (tokens.length >= 5) {
+                codes.add(tokens[4]);
             }
         }
         br.close();

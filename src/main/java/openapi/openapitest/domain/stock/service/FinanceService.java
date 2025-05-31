@@ -26,13 +26,13 @@ public class FinanceService {
     private final ObjectMapper objectMapper;
 
 
-    @Value("${APP_KEY}")
+    @Value("${tuza.api.APP_KEY}")
     private String appKey;
 
-    @Value("${APP_SECRET_KEY}")
+    @Value("${tuza.api.APP_SECRET_KEY}")
     private String appSecret;
 
-    @Value("${ACCESS_TOKEN}")
+    @Value("${tuza.api.ACCESS_TOKEN}")
     private String accessToken;
 
     private HttpHeaders createHeaders() {

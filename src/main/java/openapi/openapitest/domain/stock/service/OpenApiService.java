@@ -2,32 +2,24 @@ package openapi.openapitest.domain.stock.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import openapi.openapitest.domain.stock.entity.jpa.StockCode;
-import openapi.openapitest.domain.stock.entity.r2dbc.StockInfo;
-import openapi.openapitest.domain.stock.repository.r2dbc.StocksInfoRepository;
-import openapi.openapitest.domain.stock.repository.jpa.StockCodeRepository;
-import openapi.openapitest.domain.stock.repository.r2dbc.StocksInfoRepository;
+import openapi.openapitest.domain.stock.entity.StockInfo;
+import openapi.openapitest.domain.stock.repository.StocksInfoRepository;
+import openapi.openapitest.domain.stock.repository.StockCodeRepository;
 import openapi.openapitest.dto.RequestTuzaAccessTokenDto;
-import openapi.openapitest.dto.ResponseCurrentOutputDto;
+import openapi.openapitest.dto.ResponseCurrentPerPbrOutputDto;
 import openapi.openapitest.dto.ResponseRankingOutputDto;
 import openapi.openapitest.dto.ResponseTuzaAccessTokenDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -41,23 +33,25 @@ public class OpenApiService {
     private final ObjectMapper objectMapper;
     private final StockCodeRepository stockCodeRepository;
     private final StocksInfoRepository stocksInfoRepository;
+    private final RestTemplate restTemplate;
 
 
-    @Value("${APP_KEY}")
+    @Value("${tuza.api.APP_KEY}")
     private String appKey;
 
-    @Value("${APP_SECRET_KEY}")
+    @Value("${tuza.api.APP_SECRET_KEY}")
     private String appSecret;
 
-    @Value("${ACCESS_TOKEN}")
+    @Value("${tuza.api.ACCESS_TOKEN}")
     private String accessToken;
 
     @Autowired
-    public OpenApiService(WebClient.Builder webClient, ObjectMapper objectMapper, StockCodeRepository stockCodeRepository, StocksInfoRepository stocksInfoRepository) {
+    public OpenApiService(WebClient.Builder webClient, ObjectMapper objectMapper, StockCodeRepository stockCodeRepository, StocksInfoRepository stocksInfoRepository, RestTemplate restTemplate) {
         this.webClient = webClient.baseUrl("https://openapi.koreainvestment.com:9443").build();
         this.objectMapper = objectMapper;
         this.stockCodeRepository = stockCodeRepository;
         this.stocksInfoRepository = stocksInfoRepository;
+        this.restTemplate = restTemplate;
     }
 
     public ResponseTuzaAccessTokenDto getTuzaAcessToken(@RequestBody RequestTuzaAccessTokenDto dto) {
@@ -130,35 +124,6 @@ public class OpenApiService {
         }
     }
 
-
-    private Mono<ResponseCurrentOutputDto> parsingCurrentInfo(String response) {
-        ResponseCurrentOutputDto data = new ResponseCurrentOutputDto();
-
-        try {
-            JsonNode rootNode = objectMapper.readTree(response);
-            JsonNode node = rootNode.path("output");
-
-//            log.info("outputNode : {} ", node);
-//            log.info("outputNodeSize : {}", node.size());
-
-
-            if (node != null) {
-                ResponseCurrentOutputDto outputDto = new ResponseCurrentOutputDto();
-
-                outputDto.setStck_prpr(node.path("stck_prpr").asText());
-                outputDto.setPer(node.path("per").asText());
-                outputDto.setPbr(node.path("pbr").asText());
-
-                outputDto.setStck_shrn_iscd(node.path("stck_shrn_iscd").asText());
-                data = outputDto;
-            }
-            return Mono.just(data);
-        } catch (Exception e) {
-            log.error("error is : {}", e.getMessage());
-            return Mono.error(e);
-        }
-    }
-
     public Mono<List<ResponseRankingOutputDto>> getTradingRank() {
         HttpHeaders headers = createHeaders();
 
@@ -182,56 +147,4 @@ public class OpenApiService {
                 .flatMap(response -> parsingTradingRank(response));
     }
 
-    @Transactional("transactionManager")
-    public Mono<ResponseCurrentOutputDto> getCurrentInfo(String stockCode) {
-        HttpHeaders header = createHeaders();
-
-        return webClient.get()
-                .uri(uriBuilder -> uriBuilder.path("/uapi/domestic-stock/v1/quotations/inquire-price")
-                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")
-                        .queryParam("FID_INPUT_ISCD", stockCode)
-                        .build())
-                .headers(httpHeaders -> httpHeaders.addAll(header))
-                .retrieve()
-                .bodyToMono(String.class)
-                .flatMap(response -> parsingCurrentInfo(response));
-    }
-
-    public void createCurrentStocksInfo() {
-        List<StockCode> stockCodeList = stockCodeRepository.findAll();
-
-
-        HttpHeaders header = createHeaders();
-
-//        log.info("stockCodeListSize: {}", stockCodeList.size());
-        stocksInfoRepository.deleteAll()
-                .thenMany(Flux.fromIterable(stockCodeList))
-                .delayElements(Duration.ofMillis(500))
-                .flatMapSequential(code -> webClient.get()
-                                .uri(uriBuilder -> uriBuilder.path("/uapi/domestic-stock/v1/quotations/inquire-price")
-                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")
-                                        .queryParam("FID_INPUT_ISCD", code.getCode())
-                                        .build())
-
-                                .headers(httpHeaders -> httpHeaders.addAll(header))
-                                .retrieve()
-                                .bodyToMono(String.class)
-                                .flatMap(response -> parsingCurrentInfo(response))
-                                .flatMap(responseDto -> saveToDb(responseDto))
-                        , 100)
-                .subscribe(
-                        result -> log.info("Saved Result : {}", result),
-                        error -> log.error("Error : {}", error.getMessage()),
-                        () -> log.info("All stocks processed")
-                );
-    }
-
-    private Mono<StockInfo> saveToDb(ResponseCurrentOutputDto dto) {
-
-        StockInfo entity = dto.toEntity();
-//        log.info("dto : {}", dto.getPbr());
-
-        Mono<StockInfo> savedStockInfo = stocksInfoRepository.save(entity);
-        return savedStockInfo;
-    }
 }

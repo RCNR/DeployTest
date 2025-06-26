@@ -1,8 +1,10 @@
 package openapi.openapitest.dto;
 
+import lombok.Builder;
 import lombok.Getter;
 
 @Getter
+@Builder
 public class ResponseTuzaAccessTokenDto {
 
     private String access_token;

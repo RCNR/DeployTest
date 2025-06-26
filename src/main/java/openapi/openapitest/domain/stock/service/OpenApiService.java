@@ -2,17 +2,16 @@ package openapi.openapitest.domain.stock.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
-import openapi.openapitest.domain.stock.entity.StockInfo;
 import openapi.openapitest.domain.stock.repository.StocksInfoRepository;
 import openapi.openapitest.domain.stock.repository.StockCodeRepository;
 import openapi.openapitest.dto.RequestTuzaAccessTokenDto;
-import openapi.openapitest.dto.ResponseCurrentPerPbrOutputDto;
 import openapi.openapitest.dto.ResponseRankingOutputDto;
 import openapi.openapitest.dto.ResponseTuzaAccessTokenDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -34,6 +33,7 @@ public class OpenApiService {
     private final StockCodeRepository stockCodeRepository;
     private final StocksInfoRepository stocksInfoRepository;
     private final RestTemplate restTemplate;
+    private final ApiTokenService apiTokenService;
 
 
     @Value("${tuza.api.APP_KEY}")
@@ -42,16 +42,17 @@ public class OpenApiService {
     @Value("${tuza.api.APP_SECRET_KEY}")
     private String appSecret;
 
-    @Value("${tuza.api.ACCESS_TOKEN}")
+    //    @Value("${tuza.api.ACCESS_TOKEN}")
     private String accessToken;
 
     @Autowired
-    public OpenApiService(WebClient.Builder webClient, ObjectMapper objectMapper, StockCodeRepository stockCodeRepository, StocksInfoRepository stocksInfoRepository, RestTemplate restTemplate) {
+    public OpenApiService(WebClient.Builder webClient, ObjectMapper objectMapper, StockCodeRepository stockCodeRepository, StocksInfoRepository stocksInfoRepository, RestTemplate restTemplate, ApiTokenService apiTokenService) {
         this.webClient = webClient.baseUrl("https://openapi.koreainvestment.com:9443").build();
         this.objectMapper = objectMapper;
         this.stockCodeRepository = stockCodeRepository;
         this.stocksInfoRepository = stocksInfoRepository;
         this.restTemplate = restTemplate;
+        this.apiTokenService = apiTokenService;
     }
 
     public ResponseTuzaAccessTokenDto getTuzaAcessToken(@RequestBody RequestTuzaAccessTokenDto dto) {
@@ -79,11 +80,13 @@ public class OpenApiService {
     private HttpHeaders createHeaders() {
         HttpHeaders httpHeaders = new HttpHeaders();
         httpHeaders.setContentType(MediaType.APPLICATION_JSON);
+        accessToken = apiTokenService.getCurrentAccessToken();
         httpHeaders.setBearerAuth(accessToken);
         httpHeaders.set("appkey", appKey);
         httpHeaders.set("appsecret", appSecret);
-        httpHeaders.set("tr_id", "FHKST01010100");
+        httpHeaders.set("tr_id", "FHPST01710000");
         httpHeaders.set("custtype", "P");
+
 
         return httpHeaders;
     }
@@ -127,7 +130,7 @@ public class OpenApiService {
     public Mono<List<ResponseRankingOutputDto>> getTradingRank() {
         HttpHeaders headers = createHeaders();
 
-        return webClient.get()
+        Mono<List<ResponseRankingOutputDto>> list = webClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/uapi/domestic-stock/v1/quotations/volume-rank")
                         .queryParam("FID_COND_MRKT_DIV_CODE", "J")
                         .queryParam("FID_COND_SCR_DIV_CODE", "20171")
@@ -145,6 +148,10 @@ public class OpenApiService {
                 .retrieve()
                 .bodyToMono(String.class)
                 .flatMap(response -> parsingTradingRank(response));
+
+        log.info(list.toString());
+
+        return list;
     }
 
 }

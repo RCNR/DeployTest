@@ -2,6 +2,7 @@ package openapi.openapitest.domain.stock.controller;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import openapi.openapitest.domain.stock.service.ApiTokenService;
 import openapi.openapitest.domain.stock.service.NasdaqService;
 import openapi.openapitest.domain.stock.service.PerPbrService;
 import openapi.openapitest.dto.RequestTuzaAccessTokenDto;
@@ -24,6 +25,7 @@ public class OpenApiController {
     private final OpenApiService service;
     private final PerPbrService perPbrService;
     private final NasdaqService nasdaqService;
+    private final ApiTokenService apiTokenService;
 
     @GetMapping("/home")
     @Tag(name = "테스트")
@@ -32,14 +34,21 @@ public class OpenApiController {
     }
 
 
-    @PostMapping("/get-tuza-accessToken")
+   /* @PostMapping("/get-tuza-accessToken")
     @Tag(name = "한국 투자 증권 액세스 키 발급")
     public ResponseEntity<ResponseTuzaAccessTokenDto> getTuzaAccessToken(@RequestBody RequestTuzaAccessTokenDto dto) {
 
         ResponseTuzaAccessTokenDto tuzaAcessToken = service.getTuzaAcessToken(dto);
         return ResponseEntity.ok(tuzaAcessToken);
-    }
+    }*/
 
+    @PostMapping("/get-tuza-accessToken")
+    @Tag(name = "한국 투자 증권 액세스 키 발급")
+    public ResponseEntity<?> getTuzaAccessToken() {
+
+        boolean result = apiTokenService.refreshAccessToken();
+        return ResponseEntity.ok(result);
+    }
 
     @GetMapping("/trading-rank")
     @Tag(name = "거래량 순위")
